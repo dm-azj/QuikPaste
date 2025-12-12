@@ -1,0 +1,13 @@
+*{box-sizing:border-box}
+body{font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;background:#f7f7f8;color:#111;margin:0;padding:1rem}
+header h1{margin:0 0 1rem 0;font-size:1.25rem}
+main{max-width:900px;margin:0 auto}
+form{display:flex;flex-direction:column;gap:.5rem}
+input#title{padding:.5rem;border:1px solid #dcdcdc;border-radius:6px}
+textarea{min-height:220px;padding:.75rem;border-radius:8px;border:1px solid #ddd;font-family:inherit;font-size:14px}
+.controls{display:flex;justify-content:flex-end}
+button{background:#0066ff;color:#fff;border:0;padding:.5rem .75rem;border-radius:6px;cursor:pointer}
+section#view.hidden{display:none}
+pre{background:#fff;border:1px solid #e6e6e6;padding:1rem;border-radius:8px;overflow:auto}
+ul{padding-left:1rem}
+li{margin:.35rem 0}

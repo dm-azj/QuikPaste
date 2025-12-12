@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>QuikPaste</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header><h1>QuikPaste</h1></header>
+  <main>
+    <form id="pasteForm">
+      <input id="title" placeholder="Optional title" />
+      <textarea id="paste" placeholder="Paste text here..." required></textarea>
+      <div class="controls"><button type="submit">Create Paste</button></div>
+    </form>
+
+    <section id="view" class="hidden">
+      <h2 id="viewTitle"></h2>
+      <a id="rawLink" href="#" target="_blank">Raw</a>
+      <pre id="viewContent"></pre>
+    </section>
+
+    <section id="list">
+      <h2>Recent pastes</h2>
+      <ul id="pastelist"></ul>
+    </section>
+  </main>
+
+  <script>
+    const LS_INDEX='qp_index';
+    const API_BASE = (typeof window.QP_API_BASE !== 'undefined')
+      ? String(window.QP_API_BASE).replace(/\/$/, '')
+      : (location.protocol && location.protocol.startsWith('http') ? location.origin : '');
+
+    function idFor(){return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);} 
+    function saveLocalPaste(id, title, text){
+      localStorage.setItem('qp_'+id, JSON.stringify({id,title,text,ts:Date.now()}));
+      const idx=JSON.parse(localStorage.getItem(LS_INDEX)||'[]');
+      idx.unshift(id);
+      localStorage.setItem(LS_INDEX, JSON.stringify(idx.slice(0,50)));
+    }
+    function getLocalPaste(id){
+      const raw=localStorage.getItem('qp_'+id);
+      return raw?JSON.parse(raw):null;
+    }
+    function renderList(items){
+      const ul=document.getElementById('pastelist'); ul.innerHTML='';
+      if(!items) items = (JSON.parse(localStorage.getItem(LS_INDEX)||'[]')).map(id=>getLocalPaste(id)).filter(Boolean);
+      items.forEach(p=>{
+        const li=document.createElement('li');
+        const a=document.createElement('a');
+        a.href='#'+p.id; a.textContent = p.title || (p.text.slice(0,60).replace(/\n/g,' ')) || '(empty)';
+        a.addEventListener('click', e=>{ e.preventDefault(); showPaste(p.id); history.replaceState(null,'', '#'+p.id);});
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
+    }
+    function showPaste(id){
+      const pLocal = getLocalPaste(id);
+      document.getElementById('view').classList.remove('hidden');
+      document.getElementById('viewTitle').textContent = (pLocal && pLocal.title) || ('Paste '+id);
+      document.getElementById('viewContent').textContent = (pLocal && pLocal.text) || 'Loading...';
+      document.getElementById('rawLink').href = 'raw.html#'+id;
+
+      if(API_BASE){
+        fetch(API_BASE + '/pastes/' + id).then(r=>{
+          if(!r.ok) throw new Error('not found');
+          return r.json();
+        }).then(p=>{
+          document.getElementById('viewTitle').textContent = p.title || ('Paste '+p.id);
+          document.getElementById('viewContent').textContent = p.text;
+          document.getElementById('rawLink').href = (API_BASE + '/raw/' + p.id);
+        }).catch(()=>{});
+      }
+    }
+
+    async function createRemotePaste(title, text){
+      const res = await fetch(API_BASE + '/pastes', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({title,text})});
+      if(!res.ok) throw new Error('remote failed');
+      return (await res.json()).id;
+    }
+
+    document.getElementById('pasteForm').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const text=document.getElementById('paste').value;
+      const title=document.getElementById('title').value;
+      if(API_BASE){
+        try{
+          const id = await createRemotePaste(title,text);
+          // mirror locally
+          saveLocalPaste(id,title,text);
+          renderList();
+          showPaste(id);
+          location.hash = id;
+          return;
+        }catch(err){
+          console.warn('remote failed, falling back to local', err);
+        }
+      }
+      const id=idFor();
+      saveLocalPaste(id,title,text);
+      renderList();
+      showPaste(id);
+      location.hash = id;
+    });
+
+    window.addEventListener('hashchange', ()=>{ const id=location.hash.slice(1); if(id) showPaste(id);});
+    window.addEventListener('DOMContentLoaded', async ()=>{
+      if(API_BASE){
+        try{
+          const r = await fetch(API_BASE + '/pastes');
+          if(r.ok){
+            const list = await r.json();
+            // mirror first page locally
+            list.slice(0,50).forEach(p=> saveLocalPaste(p.id,p.title,p.text));
+            renderList(list);
+            const id=location.hash.slice(1);
+            if(id) showPaste(id);
+            return;
+          }
+        }catch(e){/*ignore*/}
+      }
+      renderList();
+      const id=location.hash.slice(1);
+      if(id) showPaste(id);
+    });
+  </script>
+</body>
+</html>
